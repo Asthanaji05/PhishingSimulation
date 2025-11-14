@@ -35,10 +35,16 @@ cp .env.example .env
 Edit `.env` with your configuration:
 
 ```env
-# Supabase credentials (provided automatically if using Supabase)
+# Supabase Configuration
+# Backend supports both naming conventions
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Or use REACT_APP_ prefix (for React frontend, backend will fallback to these)
+REACT_APP_SUPABASE_URL=your_supabase_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+REACT_APP_SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # SMTP Configuration
 SMTP_HOST=smtp.gmail.com
@@ -50,6 +56,8 @@ SMTP_PASS=your_app_password
 TRACKING_BASE_URL=http://localhost:3000
 SERVER_PORT=3000
 ```
+
+**Note**: The backend will automatically use `REACT_APP_*` variables if the non-prefixed versions are not found, so you can use either naming convention.
 
 ### SMTP Setup (Gmail Example)
 
@@ -69,65 +77,62 @@ Row Level Security (RLS) is enabled to protect data access.
 
 ## Usage
 
-### 1. Start the Tracking Server
+### 1. Install Dependencies
 
 ```bash
+# Install backend dependencies
+npm install
+
+# Install frontend dependencies
+cd client
+npm install
+cd ..
+```
+
+### 2. Start the Application
+
+**Option A: Development Mode (Frontend + Backend)**
+```bash
+npm run dev
+```
+This starts both the Express server (port 3000) and React development server (port 3001).
+
+**Option B: Production Mode**
+```bash
+# Build the React frontend
+npm run build
+
+# Start the server (serves both API and frontend)
 npm start
-# or
-node server.js
 ```
 
-The server will run on port 3000 (configurable in .env).
+The application will be available at `http://localhost:3000` (or your configured port).
 
-### 2. Add Recipients
+### 3. Using the Web Interface
 
-Edit `examples/addRecipients.js` with your recipient list, then run:
+Once the application is running, you can:
 
-```bash
-npm run add-recipients
-# or
-node examples/addRecipients.js
-```
+- **Dashboard**: View overview statistics
+- **Recipients**: Add, edit, and delete email recipients through the web interface
+- **Campaigns**: Create, edit, delete, and send phishing simulation campaigns
+- **Analytics**: View campaign performance, click statistics, and download CSV reports
 
-Recipients can be added as:
-- Objects: `{ email, name, department }`
-- Strings: `'email@example.com'`
+### 4. Email Template Placeholders
 
-### 3. Create a Campaign
-
-Edit `examples/createCampaign.js` to customize your email template, then run:
-
-```bash
-npm run create-campaign
-# or
-node examples/createCampaign.js
-```
-
-The email template supports placeholders:
+When creating campaigns, use these placeholders in your email body:
 - `{{name}}` - Recipient name or email
 - `{{email}}` - Recipient email address
 - `{{tracking_url}}` - Unique tracking link
 
-### 4. Send the Campaign
+### Legacy Scripts (Optional)
 
-Use the campaign ID from step 3:
+The original command-line scripts are still available but not required:
 
 ```bash
+npm run add-recipients
+npm run create-campaign
 node examples/sendCampaign.js <campaign-id>
-```
-
-To send to specific recipients:
-
-```bash
-node examples/sendCampaign.js <campaign-id> user1@example.com,user2@example.com
-```
-
-### 5. View Analytics
-
-```bash
 npm run view-report
-# or
-node examples/viewReport.js
 ```
 
 ## API Endpoints
@@ -142,22 +147,37 @@ The tracking server provides the following endpoints:
 
 - `GET /api/campaigns` - List all campaigns
 - `GET /api/campaigns/:id` - Get campaign details
+- `POST /api/campaigns` - Create a new campaign
+- `PUT /api/campaigns/:id` - Update a campaign
+- `DELETE /api/campaigns/:id` - Delete a campaign
 - `GET /api/campaigns/:id/stats` - Get campaign statistics
 - `GET /api/campaigns/:id/clicks` - Get all clicks for a campaign
+- `POST /api/campaigns/:id/send` - Send campaign to recipients
+- `POST /api/campaigns/:id/verify-smtp` - Verify SMTP connection
 
-### Recipients & Clicks
+### Recipients
 
 - `GET /api/recipients` - List all recipients
+- `POST /api/recipients` - Create a new recipient
+- `PUT /api/recipients/:id` - Update a recipient
+- `DELETE /api/recipients/:id` - Delete a recipient
+
+### Clicks & Reports
+
 - `GET /api/clicks` - List all click events
-
-### Reports
-
 - `GET /api/report/csv` - Download CSV report of all clicks
 
 ## Project Structure
 
 ```
 /project-root
+  /client              # React frontend application
+    /src
+      /components      # React components
+      /pages           # Page components (Dashboard, Recipients, etc.)
+      /services        # API service layer
+    /public            # Static assets
+    package.json       # Frontend dependencies
   /src
     config.js          # Configuration and environment variables
     db.js              # Database operations and Supabase client
@@ -165,13 +185,15 @@ The tracking server provides the following endpoints:
     trackingServer.js  # Express server for tracking and API
     utils.js           # Utility functions
   /examples
-    addRecipients.js   # Script to add recipients
-    createCampaign.js  # Script to create campaigns
-    sendCampaign.js    # Script to send campaigns
-    viewReport.js      # Script to view analytics
+    addRecipients.js   # Script to add recipients (legacy)
+    createCampaign.js  # Script to create campaigns (legacy)
+    sendCampaign.js    # Script to send campaigns (legacy)
+    viewReport.js      # Script to view analytics (legacy)
   /public
     training.html      # Training page shown after click
+  /build               # React production build (generated)
   server.js            # Main server entry point
+  package.json         # Backend dependencies
   .env.example         # Example environment configuration
 ```
 

@@ -2,6 +2,7 @@ const express = require('express');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
 const config = require('./config');
 const db = require('./db');
+const emailSender = require('./emailSender');
 const { getClientIp, getUserAgent } = require('./utils');
 const path = require('path');
 
@@ -99,6 +100,61 @@ app.get('/api/campaigns/:id/clicks', async (req, res) => {
   }
 });
 
+app.post('/api/campaigns', async (req, res) => {
+  try {
+    const { name, subject, body } = req.body;
+    if (!name || !subject || !body) {
+      return res.status(400).json({ error: 'Name, subject and body are required' });
+    }
+    const campaign = await db.createCampaign(name, subject, body);
+    res.status(201).json(campaign);
+  } catch (error) {
+    console.error('Error creating campaign:', error);
+    res.status(500).json({ error: error.message || 'Failed to create campaign' });
+  }
+});
+
+app.put('/api/campaigns/:id', async (req, res) => {
+  try {
+    const updated = await db.updateCampaign(req.params.id, req.body);
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating campaign:', error);
+    res.status(500).json({ error: error.message || 'Failed to update campaign' });
+  }
+});
+
+app.delete('/api/campaigns/:id', async (req, res) => {
+  try {
+    await db.deleteCampaign(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting campaign:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete campaign' });
+  }
+});
+
+app.post('/api/campaigns/:id/verify-smtp', async (req, res) => {
+  try {
+    const connected = await emailSender.verifyConnection();
+    res.json({ connected });
+  } catch (error) {
+    console.error('Error verifying SMTP:', error);
+    res.status(500).json({ error: error.message || 'Failed to verify SMTP connection' });
+  }
+});
+
+app.post('/api/campaigns/:id/send', async (req, res) => {
+  try {
+    const { recipientEmails } = req.body;
+    const result = await emailSender.sendCampaign(req.params.id, recipientEmails);
+    res.json(result);
+  } catch (error) {
+    console.error('Error sending campaign:', error);
+    res.status(500).json({ error: error.message || 'Failed to send campaign' });
+  }
+});
+
 app.get('/api/recipients', async (req, res) => {
   try {
     const recipients = await db.getAllRecipients();
@@ -106,6 +162,53 @@ app.get('/api/recipients', async (req, res) => {
   } catch (error) {
     console.error('Error fetching recipients:', error);
     res.status(500).json({ error: 'Failed to fetch recipients' });
+  }
+});
+
+app.get('/api/recipients/:id', async (req, res) => {
+  try {
+    const recipient = await db.getRecipientById(req.params.id);
+    if (!recipient) {
+      return res.status(404).json({ error: 'Recipient not found' });
+    }
+    res.json(recipient);
+  } catch (error) {
+    console.error('Error fetching recipient:', error);
+    res.status(500).json({ error: 'Failed to fetch recipient' });
+  }
+});
+
+app.post('/api/recipients', async (req, res) => {
+  try {
+    const { email, name, department } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    const recipient = await db.addRecipient(email, name, department);
+    res.status(201).json(recipient);
+  } catch (error) {
+    console.error('Error creating recipient:', error);
+    res.status(500).json({ error: error.message || 'Failed to create recipient' });
+  }
+});
+
+app.put('/api/recipients/:id', async (req, res) => {
+  try {
+    const updated = await db.updateRecipient(req.params.id, req.body);
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating recipient:', error);
+    res.status(500).json({ error: error.message || 'Failed to update recipient' });
+  }
+});
+
+app.delete('/api/recipients/:id', async (req, res) => {
+  try {
+    await db.deleteRecipient(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting recipient:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete recipient' });
   }
 });
 
@@ -147,6 +250,19 @@ app.get('/api/report/csv', async (req, res) => {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/health/supabase', async (req, res) => {
+  try {
+    const result = await db.checkSupabaseHealth();
+    if (result.status === 'ok') {
+      return res.json({ status: 'ok' });
+    }
+    res.status(500).json(result);
+  } catch (error) {
+    console.error('Supabase health check failed:', error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
 });
 
 function startServer() {

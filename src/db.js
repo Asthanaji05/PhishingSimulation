@@ -1,6 +1,18 @@
 const { createClient } = require('@supabase/supabase-js');
 const config = require('./config');
 
+if (!config.supabase.url) {
+  throw new Error('REACT_APP_SUPABASE_URL is required in .env file');
+}
+
+if (!config.supabase.serviceRoleKey) {
+  throw new Error('REACT_APP_SUPABASE_SERVICE_ROLE_KEY is required in .env file');
+}
+
+if (!config.supabase.anonKey) {
+  throw new Error('REACT_APP_SUPABASE_ANON_KEY is required in .env file');
+}
+
 const supabase = createClient(
   config.supabase.url,
   config.supabase.serviceRoleKey
@@ -22,11 +34,51 @@ async function addRecipient(email, name = null, department = null) {
   return data;
 }
 
+async function updateRecipient(id, payload) {
+  const updateData = {
+    email: payload.email,
+    name: payload.name,
+    department: payload.department,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('recipients')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function deleteRecipient(id) {
+  const { error } = await supabase
+    .from('recipients')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return true;
+}
+
 async function getRecipientByEmail(email) {
   const { data, error } = await supabase
     .from('recipients')
     .select('*')
     .eq('email', email)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+async function getRecipientById(id) {
+  const { data, error } = await supabase
+    .from('recipients')
+    .select('*')
+    .eq('id', id)
     .maybeSingle();
 
   if (error) throw error;
@@ -52,6 +104,34 @@ async function createCampaign(name, subject, body) {
 
   if (error) throw error;
   return data;
+}
+
+async function updateCampaign(id, payload) {
+  const updateData = {};
+  if (payload.name !== undefined) updateData.name = payload.name;
+  if (payload.subject !== undefined) updateData.subject = payload.subject;
+  if (payload.body !== undefined) updateData.body = payload.body;
+  if (payload.status !== undefined) updateData.status = payload.status;
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function deleteCampaign(id) {
+  const { error } = await supabase
+    .from('campaigns')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return true;
 }
 
 async function updateCampaignStatus(campaignId, status, sentAt = null) {
@@ -162,13 +242,30 @@ async function getCampaignStats(campaignId) {
   };
 }
 
+async function checkSupabaseHealth() {
+  try {
+    const { error } = await supabase.from('recipients').select('id').limit(1);
+    if (error) {
+      return { status: 'error', message: error.message };
+    }
+    return { status: 'ok' };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
 module.exports = {
   supabase,
   supabaseAnon,
   addRecipient,
   getRecipientByEmail,
+  getRecipientById,
   getAllRecipients,
+  updateRecipient,
+  deleteRecipient,
   createCampaign,
+  updateCampaign,
+  deleteCampaign,
   updateCampaignStatus,
   getCampaign,
   getAllCampaigns,
@@ -176,5 +273,6 @@ module.exports = {
   getClickEventByToken,
   getClickEventsByCampaign,
   getAllClickEvents,
-  getCampaignStats
+  getCampaignStats,
+  checkSupabaseHealth
 };

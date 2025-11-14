@@ -2,9 +2,9 @@ require('dotenv').config();
 
 const config = {
   supabase: {
-    url: process.env.SUPABASE_URL,
-    anonKey: process.env.SUPABASE_ANON_KEY,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY
+    url: process.env.REACT_APP_SUPABASE_URL,
+    anonKey: process.env.REACT_APP_SUPABASE_ANON_KEY,
+    serviceRoleKey: process.env.REACT_APP_SUPABASE_SERVICE_ROLE_KEY
   },
   smtp: {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
