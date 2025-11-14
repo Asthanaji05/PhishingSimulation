@@ -8,47 +8,35 @@ The Email Click Tracking System is a Node.js-based application designed for orga
 
 ### High-Level Architecture
 
-```
-┌─────────────────┐
-│   Email Client  │
-│   (Recipient)   │
-└────────┬────────┘
-         │
-         │ Clicks tracking link
-         ▼
+```text
+┌────────────────────────────┐
+│   React Admin Frontend     │
+│   (client/, port 3001 dev) │
+└──────────────┬─────────────┘
+               │ REST / API calls
+               ▼
 ┌─────────────────────────────────┐
 │   Express Tracking Server       │
 │   (Port 3000)                   │
 │   - /track/:token               │
-│   - /api/*                      │
-└────────┬────────────────────────┘
-         │
-         │ Logs click event
-         ▼
-┌─────────────────────────────────┐
-│      Supabase Database          │
-│   - recipients                  │
-│   - campaigns                   │
-│   - click_events                │
-└─────────────────────────────────┘
+│   - /api/* + health endpoints   │
+└────────┬───────────────┬────────┘
+         │               │
+         │ Logs clicks   │ Sends campaigns
+         ▼               ▼
+┌────────────────┐   ┌─────────────────────┐
+│ Supabase DB    │   │ SMTP Server         │
+│ - recipients   │   │ (Gmail/SendGrid/etc)│
+│ - campaigns    │   └─────────────────────┘
+│ - click_events │
+└────────────────┘
          ▲
-         │
-         │ Query/Insert
-         │
-┌─────────────────────────────────┐
-│   Campaign Management Scripts    │
-│   - addRecipients.js            │
-│   - createCampaign.js           │
-│   - sendCampaign.js             │
-│   - viewReport.js               │
-└────────┬────────────────────────┘
-         │
-         │ Sends emails
+         │ Legacy automation scripts (optional)
+         │ - addRecipients.js, sendCampaign.js, etc.
          ▼
-┌─────────────────────────────────┐
-│      SMTP Server                │
-│   (Gmail/SendGrid/etc)          │
-└─────────────────────────────────┘
+┌────────────────────────────┐
+│ Node CLI scripts (examples)│
+└────────────────────────────┘
 ```
 
 ## Core Components
@@ -76,12 +64,10 @@ The Email Click Tracking System is a Node.js-based application designed for orga
 
 **Purpose**: Abstraction layer for all database operations using Supabase client.
 
-**Key Functions**:
-
-- **Recipient Management**: `addRecipient()`, `getRecipientByEmail()`, `getAllRecipients()`
-- **Campaign Management**: `createCampaign()`, `updateCampaignStatus()`, `getCampaign()`, `getAllCampaigns()`
+- **Recipient Management**: `addRecipient()`, `getRecipientByEmail()`, `getRecipientById()`, `getAllRecipients()`, `updateRecipient()`, `deleteRecipient()`
+- **Campaign Management**: `createCampaign()`, `getCampaign()`, `getAllCampaigns()`, `updateCampaign()`, `deleteCampaign()`, `updateCampaignStatus()`
 - **Click Tracking**: `logClickEvent()`, `getClickEventByToken()`, `getClickEventsByCampaign()`, `getAllClickEvents()`
-- **Analytics**: `getCampaignStats()` - calculates click rates and statistics
+- **Analytics & Health**: `getCampaignStats()` for reporting, `checkSupabaseHealth()` for runtime diagnostics
 
 **Database Clients**:
 
@@ -118,6 +104,8 @@ The Email Click Tracking System is a Node.js-based application designed for orga
 - **SMTP**: Host, port, authentication credentials
 - **Server**: Port, tracking base URL
 
+The configuration loader first looks for `SUPABASE_*` variables and automatically falls back to `REACT_APP_SUPABASE_*`, so a single `.env` file can power both backend and frontend.
+
 ### 5. Utilities (`src/utils.js`)
 
 **Purpose**: Shared utility functions used across the system.
@@ -130,25 +118,33 @@ The Email Click Tracking System is a Node.js-based application designed for orga
 - `buildTrackingUrl()`: Constructs tracking URL from base URL and token
 - `replacePlaceholders()`: Template engine for email personalization
 
+### 6. React Frontend (`client/`)
+
+**Purpose**: Provides the administrative UI for campaign orchestration, built with React 18, React Router, and Reactstrap.
+
+**Key Screens**:
+
+- **Dashboard** – global metrics pulled from `/api/campaigns`, `/api/recipients`, `/api/clicks`
+- **Recipients** – CRUD interface mapped to `/api/recipients/*`
+- **Campaigns** – manage templates, trigger SMTP sends, and view delivery errors
+- **Analytics** – campaign-level drill-down, CSV export, and Supabase-backed statistics
+
+The frontend communicates with the Express API via `client/src/services/api.js`, and is served statically from `/build` in production.
+
 ## Data Flow
 
-### Campaign Sending Flow
+### Campaign Sending Flow (UI-driven)
 
 ```text
-1. Admin runs sendCampaign.js with campaign ID
+1. Admin opens the Campaigns page in the React frontend
    ↓
-2. Script loads campaign from database
+2. UI calls /api/campaigns to list drafts and POST /api/campaigns for new templates
    ↓
-3. Retrieves recipient list (all or filtered)
+3. When "Send" is triggered, frontend verifies SMTP (/api/campaigns/:id/verify-smtp)
    ↓
-4. For each recipient:
-   a. Generate unique tracking token
-   b. Build tracking URL
-   c. Replace placeholders in email template
-   d. Send email via SMTP
-   e. Create click_events record with token
+4. Backend generates tracking tokens, sends email via Nodemailer, and stores the pending click record
    ↓
-5. Update campaign status to 'sent'
+5. Campaign status is updated to "sent" once dispatch completes
 ```
 
 ### Click Tracking Flow
@@ -168,6 +164,28 @@ The Email Click Tracking System is a Node.js-based application designed for orga
    ↓
 6. Serve training.html page
 ```
+
+## API Surface
+
+All functionality is exposed via REST endpoints under `/api`:
+
+- **Tracking & Health**
+  - `GET /track/:token` – log clicks and serve the training page
+  - `GET /health` – process heartbeat
+  - `GET /api/health/supabase` – Supabase connectivity check
+- **Campaigns**
+  - `GET /api/campaigns`, `GET /api/campaigns/:id`
+  - `POST /api/campaigns`, `PUT /api/campaigns/:id`, `DELETE /api/campaigns/:id`
+  - `GET /api/campaigns/:id/stats`, `GET /api/campaigns/:id/clicks`
+  - `POST /api/campaigns/:id/verify-smtp`, `POST /api/campaigns/:id/send`
+- **Recipients**
+  - `GET /api/recipients`, `GET /api/recipients/:id`
+  - `POST /api/recipients`, `PUT /api/recipients/:id`, `DELETE /api/recipients/:id`
+- **Analytics**
+  - `GET /api/clicks`
+  - `GET /api/report/csv`
+
+Legacy CLI scripts in `/examples` call the same Supabase layer and remain useful for automation, but the UI now covers all CRUD actions.
 
 ## Database Schema
 
@@ -285,7 +303,7 @@ All database tables have RLS enabled with the following policies:
 
 - **recipients**: Authenticated users can SELECT, INSERT, UPDATE
 - **campaigns**: Authenticated users can SELECT, INSERT, UPDATE
-- **click_events**: 
+- **click_events**:
   - Anonymous and authenticated users can INSERT (for tracking)
   - Authenticated users can SELECT (for reporting)
 

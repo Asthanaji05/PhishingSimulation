@@ -158,6 +158,7 @@ The tracking server provides the following endpoints:
 ### Recipients
 
 - `GET /api/recipients` - List all recipients
+- `GET /api/recipients/:id` - Get a single recipient
 - `POST /api/recipients` - Create a new recipient
 - `PUT /api/recipients/:id` - Update a recipient
 - `DELETE /api/recipients/:id` - Delete a recipient
@@ -166,6 +167,11 @@ The tracking server provides the following endpoints:
 
 - `GET /api/clicks` - List all click events
 - `GET /api/report/csv` - Download CSV report of all clicks
+
+### Health
+
+- `GET /health` - Basic server heartbeat
+- `GET /api/health/supabase` - Verifies Supabase connectivity
 
 ## Project Structure
 
